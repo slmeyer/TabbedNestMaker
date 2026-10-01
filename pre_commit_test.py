@@ -123,7 +123,7 @@ def main():
     # Test 5: Basic CLI functionality
     total_tests += 1
     if run_command(
-        "python boxmaker.py --length 100 --width 80 --height 50 --thickness 3 --tab 12 --output test_precommit.svg",
+        "python boxmaker.py --preset generic --length 100 --width 80 --height 50 --thickness 3 --tab 12 --output test_precommit.svg",
         "Basic CLI test"
     ):
         if check_file_exists("test_precommit.svg", "CLI output file"):
@@ -141,7 +141,7 @@ def main():
     
     # Test dimension too small (should fail)
     result = subprocess.run(
-        "python boxmaker.py --length 20 --width 50 --height 40 --output test_fail.svg",
+        "python boxmaker.py --preset generic --length 20 --width 50 --height 40 --output test_fail.svg",
         shell=True, capture_output=True, text=True
     )
     if result.returncode == 0:
@@ -152,7 +152,7 @@ def main():
     
     # Test tab too large (should fail)  
     result = subprocess.run(
-        "python boxmaker.py --length 100 --width 100 --height 100 --thickness 3 --tab 50 --output test_fail.svg",
+        "python boxmaker.py --preset generic --length 100 --width 100 --height 100 --thickness 3 --tab 50 --output test_fail.svg",
         shell=True, capture_output=True, text=True
     )
     if result.returncode == 0:

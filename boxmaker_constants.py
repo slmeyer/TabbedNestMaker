@@ -35,6 +35,21 @@ class KeyDividerType(IntEnum):
     NONE = 3
 
 
+class HoleType:
+    """Entrance-hole shapes (plain strings so they map directly to CLI/Inkscape options)"""
+    NONE = 'none'
+    ROUND = 'round'
+    RECT = 'rect'      # rectangle with (optionally) rounded corners
+    ALL = (NONE, ROUND, RECT)
+
+
+class HoleSide:
+    """Which wall receives the entrance hole"""
+    BIG = 'big'        # the pair of vertical walls with the larger area
+    SMALL = 'small'    # the pair of vertical walls with the smaller area
+    ALL = (BIG, SMALL)
+
+
 # Default values
 DEFAULT_LENGTH = 100.0
 DEFAULT_WIDTH = 100.0
@@ -63,3 +78,44 @@ MAX_THICKNESS = 100.0
 # Conversion factors
 INCHES_TO_MM = 25.4
 HAIRLINE_THICKNESS_INCHES = 0.002
+
+
+# Common swift (Apus apus) nest box preset, used as the CLI default.
+# Sources: mursejlerne.dk / DOF recommendations (inside 34.5 x 17.5 x 17.5 cm,
+# entrance 28 x 65 mm) and Swift Conservation / Action for Swifts / RSPB (UK),
+# which recommend the same 65 x 28 mm entrance and 12-15 mm weatherproof ply.
+# All values are INSIDE dimensions in mm.
+SWIFT_PRESET = {
+    'length': 345.0,        # inside width of the box (long wall)
+    'width': 175.0,         # inside depth
+    'height': 175.0,        # inside height
+    'thickness': 12.0,      # 12-15 mm exterior/marine ply is recommended
+    'kerf': 0.1,
+    'tab': 25.0,
+    'inside': True,
+    'hole_type': 'rect',
+    'hole_side': 'big',     # entrance in a long wall
+    'hole_width': 65.0,     # long dimension of the entrance
+    'hole_height': 28.0,    # short dimension of the entrance
+    'hole_radius': 14.0,    # = height / 2 -> the oval/stadium slot used on swift boxes
+    'hole_x': 60.0,         # entrance near one end, nest cup goes at the far end
+    'hole_y': 55.0,         # centre 55 mm above inside floor (lower edge 41 mm; max 50 mm advised)
+}
+
+# Previous generic defaults (--preset generic)
+GENERIC_PRESET = {
+    'length': DEFAULT_LENGTH,
+    'width': DEFAULT_WIDTH,
+    'height': DEFAULT_HEIGHT,
+    'thickness': DEFAULT_THICKNESS,
+    'kerf': DEFAULT_KERF,
+    'tab': DEFAULT_TAB_WIDTH,
+    'inside': False,
+    'hole_type': 'none',
+    'hole_side': 'big',
+    'hole_width': 65.0,
+    'hole_height': 28.0,
+    'hole_radius': 0.0,
+    'hole_x': None,         # None = centred
+    'hole_y': None,
+}

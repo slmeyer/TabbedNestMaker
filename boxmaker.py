@@ -29,7 +29,8 @@ except ImportError:
     _ = lambda x: x  # Simple fallback for translation
 
 from boxmaker_core import BoxMakerCore
-from boxmaker_constants import BoxType, TabType, LayoutStyle
+from boxmaker_constants import (BoxType, TabType, LayoutStyle, HoleType, HoleSide,
+                                SWIFT_PRESET, GENERIC_PRESET)
 from boxmaker_exceptions import BoxMakerError, DimensionError, TabError, MaterialError
 
 linethickness = 1 # default unless overridden by settings
@@ -59,23 +60,97 @@ def getCircle(r, c):
     return circle
 
 # CLI support
+def _position(value):
+    """argparse type for --hole-x / --hole-y: a number in mm or the word 'center'"""
+    if value.lower() in ('c', 'centre', 'center'):
+        return 'center'
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("expected a number (mm) or 'center'")
+
 def create_cli_parser():
-    """Create command line argument parser"""
-    parser = argparse.ArgumentParser(description='Generate tabbed box SVG files')
-    parser.add_argument('--length', type=float, default=100.0, help='Length of box (mm)')
-    parser.add_argument('--width', type=float, default=100.0, help='Width of box (mm)')
-    parser.add_argument('--height', type=float, default=100.0, help='Height of box (mm)')
-    parser.add_argument('--thickness', type=float, default=3.0, help='Material thickness (mm)')
-    parser.add_argument('--kerf', type=float, default=0.5, help='Kerf width (mm)')
-    parser.add_argument('--tab', type=float, default=25.0, help='Tab width (mm)')
-    parser.add_argument('--style', type=int, choices=[1, 2, 3], default=LayoutStyle.SEPARATED, help='Layout style')
-    parser.add_argument('--boxtype', type=int, choices=range(1, 7), default=BoxType.FULL_BOX, help='Box type')
-    parser.add_argument('--tabtype', type=int, choices=[0, 1], default=TabType.LASER, help='Tab type (0=laser, 1=mill)')
-    parser.add_argument('--div-l', type=int, default=0, help='Dividers along length')
-    parser.add_argument('--div-w', type=int, default=0, help='Dividers along width')
-    parser.add_argument('--output', '-o', type=str, default='box.svg', help='Output SVG file')
-    parser.add_argument('--inside', action='store_true', help='Dimensions are inside measurements')
+    """Create command line argument parser
+
+    Every option that the presets know about defaults to None; the effective value is
+    then taken from the selected preset (see resolve_cli_options). By default the
+    'swift' preset is used, which describes a common swift (Apus apus) nest box.
+    """
+    parser = argparse.ArgumentParser(
+        description='Generate tabbed box SVG files. By default a nest box for the common swift '
+                    '(inside 345 x 175 x 175 mm, 12 mm ply, 65 x 28 mm oval entrance) is produced; '
+                    'use --preset generic for a plain box, or override any value.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--preset', choices=['swift', 'generic'], default='swift',
+                        help="Source of default values: 'swift' = common swift nest box, "
+                             "'generic' = plain 100x100x100 mm box without hole")
+
+    box = parser.add_argument_group('box')
+    box.add_argument('--length', type=float, default=None, help='Length of box (mm) [swift: 345]')
+    box.add_argument('--width', type=float, default=None, help='Width of box (mm) [swift: 175]')
+    box.add_argument('--height', type=float, default=None, help='Height of box (mm) [swift: 175]')
+    box.add_argument('--thickness', type=float, default=None, help='Material thickness (mm) [swift: 12]')
+    box.add_argument('--kerf', type=float, default=None, help='Kerf width (mm) [swift: 0.1, generic: 0.5]')
+    box.add_argument('--tab', type=float, default=None, help='Tab width (mm) [25]')
+    box.add_argument('--style', type=int, choices=[1, 2, 3], default=LayoutStyle.SEPARATED, help='Layout style')
+    box.add_argument('--boxtype', type=int, choices=range(1, 7), default=BoxType.FULL_BOX, help='Box type')
+    box.add_argument('--tabtype', type=int, choices=[0, 1], default=TabType.LASER, help='Tab type (0=laser, 1=mill)')
+    box.add_argument('--div-l', type=int, default=0, help='Dividers along length')
+    box.add_argument('--div-w', type=int, default=0, help='Dividers along width')
+    box.add_argument('--output', '-o', type=str, default='box.svg', help='Output SVG file')
+    dims = box.add_mutually_exclusive_group()
+    dims.add_argument('--inside', dest='inside', action='store_true', default=None,
+                      help='Dimensions are inside measurements [swift default]')
+    dims.add_argument('--outside', dest='inside', action='store_false',
+                      help='Dimensions are outside measurements [generic default]')
+
+    hole = parser.add_argument_group(
+        'entrance hole',
+        'Cuts an entrance hole into one vertical wall (e.g. to make a bird nest box). '
+        'Positions refer to the flat wall plate as drawn in the SVG (joint tabs excluded): '
+        '--hole-x from its left edge, --hole-y from its bottom edge (the edge that rests on '
+        'the floor panel, so --hole-y is the height above the inside floor). Both give the '
+        'hole CENTRE. The hole must keep at least one material thickness from the plate edges.')
+    hole.add_argument('--hole', dest='hole_type', choices=list(HoleType.ALL), default=None,
+                      help="Hole type: round, rect (rectangle, optionally with rounded corners) "
+                           "or none [swift: rect]")
+    hole.add_argument('--no-hole', dest='hole_type', action='store_const', const=HoleType.NONE,
+                      help='Shortcut for --hole none')
+    hole.add_argument('--hole-side', choices=list(HoleSide.ALL), default=None,
+                      help="Wall pair that gets the hole: 'big' = the larger vertical walls, "
+                           "'small' = the smaller ones (compared by footprint: max(length, width) "
+                           "decides). Only one wall gets a hole. [big]")
+    hole.add_argument('--hole-x', type=_position, default=None, metavar='MM|center',
+                      help='Horizontal hole centre from left plate edge, or "center" [swift: 60]')
+    hole.add_argument('--hole-y', type=_position, default=None, metavar='MM|center',
+                      help='Vertical hole centre above bottom plate edge, or "center" [swift: 55]')
+    hole.add_argument('--hole-diameter', type=float, default=32.0, help='Diameter of a round hole (mm)')
+    hole.add_argument('--hole-width', type=float, default=None,
+                      help='Width of a rect hole (mm) [65]')
+    hole.add_argument('--hole-height', type=float, default=None,
+                      help='Height of a rect hole (mm) [28]')
+    hole.add_argument('--hole-radius', type=float, default=None,
+                      help='Corner radius of a rect hole (mm); half the smaller side gives a '
+                           'fully rounded oval slot [swift: 14, generic: 0]')
     return parser
+
+def resolve_cli_options(args):
+    """Fill every option the user did not give from the selected preset. Returns a dict."""
+    preset = SWIFT_PRESET if args.preset == 'swift' else GENERIC_PRESET
+    opts = {}
+    for key, default in preset.items():
+        given = getattr(args, key, None)
+        opts[key] = default if given is None else given
+    for key in ('hole_x', 'hole_y'):
+        if opts[key] == 'center':
+            opts[key] = None
+    # An explicitly requested hole with no explicit position defaults to the plate centre,
+    # not to the swift entrance position (which would only make sense for the swift box).
+    if args.preset == 'swift' and args.hole_type is not None and args.hole_type != preset['hole_type']:
+        for key in ('hole_x', 'hole_y'):
+            if getattr(args, key) is None:
+                opts[key] = None
+    return opts
 
 def main():
     """Main CLI function"""
@@ -83,29 +158,39 @@ def main():
     import sys
     
     # Simple check: if we have CLI-style arguments, run in CLI mode
-    cli_args = ['--length', '--width', '--height', '--thickness', '--kerf', '--tab', '--output']
+    cli_args = ['--length', '--width', '--height', '--thickness', '--kerf', '--tab', '--output',
+                '--preset', '--hole', '--no-hole', '--outside']
     is_cli = any(arg in sys.argv for arg in cli_args)
     
     if not INKSCAPE_AVAILABLE or is_cli:
         # CLI mode
         parser = create_cli_parser()
         args = parser.parse_args()
+        opts = resolve_cli_options(args)
         
         # Create core instance and set parameters
         core = BoxMakerCore()
         core.set_parameters(
-            length=args.length,
-            width=args.width,
-            height=args.height,
-            thickness=args.thickness,
-            kerf=args.kerf,
-            tab=args.tab,
+            length=opts['length'],
+            width=opts['width'],
+            height=opts['height'],
+            thickness=opts['thickness'],
+            kerf=opts['kerf'],
+            tab=opts['tab'],
             style=args.style,
             boxtype=args.boxtype,
             tabtype=args.tabtype,
             div_l=args.div_l,
             div_w=args.div_w,
-            inside=1 if args.inside else 0
+            inside=1 if opts['inside'] else 0,
+            hole_type=opts['hole_type'],
+            hole_side=opts['hole_side'],
+            hole_diameter=args.hole_diameter,
+            hole_width=opts['hole_width'],
+            hole_height=opts['hole_height'],
+            hole_radius=opts['hole_radius'],
+            hole_x=opts['hole_x'],
+            hole_y=opts['hole_y'],
         )
         
         try:
@@ -202,6 +287,22 @@ if INKSCAPE_AVAILABLE:
               dest='div_w',default=25,help='Dividers (Width axis)')
             self.arg_parser.add_argument('--keydiv',action='store',type=int,
               dest='keydiv',default=3,help='Key dividers into walls/floor')
+            self.arg_parser.add_argument('--hole_type',action='store',type=str,
+              dest='hole_type',default='none',help='Entrance hole: none, round or rect')
+            self.arg_parser.add_argument('--hole_side',action='store',type=str,
+              dest='hole_side',default='big',help='Wall pair for the hole: big or small')
+            self.arg_parser.add_argument('--hole_diameter',action='store',type=float,
+              dest='hole_diameter',default=32.0,help='Round hole diameter')
+            self.arg_parser.add_argument('--hole_width',action='store',type=float,
+              dest='hole_width',default=65.0,help='Rectangular hole width')
+            self.arg_parser.add_argument('--hole_height',action='store',type=float,
+              dest='hole_height',default=28.0,help='Rectangular hole height')
+            self.arg_parser.add_argument('--hole_radius',action='store',type=float,
+              dest='hole_radius',default=0.0,help='Rectangular hole corner radius')
+            self.arg_parser.add_argument('--hole_x',action='store',type=float,
+              dest='hole_x',default=-1.0,help='Hole centre from left edge (negative = centred)')
+            self.arg_parser.add_argument('--hole_y',action='store',type=float,
+              dest='hole_y',default=-1.0,help='Hole centre from bottom edge (negative = centred)')
             self.arg_parser.add_argument('--optimize',action='store',type=inkex.utils.Boolean,
               dest='optimize',default=True,help='Optimize paths')
 
@@ -235,6 +336,17 @@ if INKSCAPE_AVAILABLE:
             core.div_w = self.options.div_w
             core.keydiv = self.options.keydiv
             core.optimize = self.options.optimize
+
+            # Entrance hole (all lengths converted to user units like the other dimensions)
+            u = lambda v: self.svg.unittouu(str(v) + core.unit)
+            core.hole_type = self.options.hole_type
+            core.hole_side = self.options.hole_side
+            core.hole_diameter = u(self.options.hole_diameter)
+            core.hole_width = u(self.options.hole_width)
+            core.hole_height = u(self.options.hole_height)
+            core.hole_radius = u(self.options.hole_radius)
+            core.hole_x = u(self.options.hole_x) if self.options.hole_x >= 0 else None
+            core.hole_y = u(self.options.hole_y) if self.options.hole_y >= 0 else None
             
             # Set line thickness based on hairline option
             global linethickness

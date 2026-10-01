@@ -91,6 +91,25 @@
 			</param>
 
 			<param name="spacing" type="float" precision="2" min="0.0" max="10000.0" _gui-text="    Space Between Parts">1.0</param> 
+
+			<spacer/>
+			<label>Entrance hole (e.g. nest box)</label>
+			<separator/>
+			<param name="hole_type" _gui-text="    Hole" type="optiongroup" appearance="combo">
+				<_option value="none">None</_option>
+				<_option value="rect">Rectangle (rounded corners)</_option>
+				<_option value="round">Round</_option>
+			</param>
+			<param name="hole_side" _gui-text="    Placed in" type="optiongroup" appearance="combo">
+				<_option value="big">Big wall</_option>
+				<_option value="small">Small wall</_option>
+			</param>
+			<param name="hole_diameter" type="float" precision="2" min="0.0" max="10000.0" _gui-text="    Round: diameter">32.0</param>
+			<param name="hole_width" type="float" precision="2" min="0.0" max="10000.0" _gui-text="    Rectangle: width">65.0</param>
+			<param name="hole_height" type="float" precision="2" min="0.0" max="10000.0" _gui-text="    Rectangle: height">28.0</param>
+			<param name="hole_radius" type="float" precision="2" min="0.0" max="10000.0" _gui-text="    Rectangle: corner radius">14.0</param>
+			<param name="hole_x" type="float" precision="2" min="-1.0" max="10000.0" _gui-text="    Centre from left edge (-1 = centred)">-1.0</param>
+			<param name="hole_y" type="float" precision="2" min="-1.0" max="10000.0" _gui-text="    Centre above bottom edge (-1 = centred)">-1.0</param>
 		</vbox>
 	</hbox> 
 	<effect>

@@ -17,7 +17,8 @@ from boxmaker_constants import (
     MIN_TAB_TO_THICKNESS_RATIO, RECOMMENDED_MIN_TAB_TO_THICKNESS_RATIO,
     MAX_TAB_TO_THICKNESS_RATIO, RECOMMENDED_MAX_TAB_TO_THICKNESS_RATIO,
     MAX_DIMENSION, MAX_THICKNESS,
-    INCHES_TO_MM, HAIRLINE_THICKNESS_INCHES
+    INCHES_TO_MM, HAIRLINE_THICKNESS_INCHES,
+    HoleType, HoleSide
 )
 from boxmaker_exceptions import DimensionError, TabError, MaterialError
 
@@ -48,7 +49,16 @@ class BoxMakerCore:
         self.div_w = 0
         self.keydiv = KeyDividerType.NONE
         self.optimize = True
-          # Internal state
+        # Entrance hole (e.g. for a bird nest box). Disabled unless hole_type is set.
+        self.hole_type = HoleType.NONE   # 'none' | 'round' | 'rect'
+        self.hole_side = HoleSide.BIG    # 'big' | 'small' wall pair
+        self.hole_diameter = 32.0        # round hole
+        self.hole_width = 65.0           # rect hole, horizontal
+        self.hole_height = 28.0          # rect hole, vertical
+        self.hole_radius = 0.0           # rect hole corner radius
+        self.hole_x = None               # centre, from left edge of plate (None = centred)
+        self.hole_y = None               # centre, from bottom edge of plate (None = centred)
+        # Internal state
         self.linethickness = 1
         self.paths: List[str] = []
         self.circles: List[Tuple[float, Tuple[float, float]]] = []
@@ -162,6 +172,110 @@ class BoxMakerCore:
                 'fill': 'none'
             }
         }
+
+    # ------------------------------------------------------------------
+    # Entrance hole support
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _fmt(v: float) -> str:
+        return ('%.4f' % v).rstrip('0').rstrip('.')
+
+    def round_hole_path(self, cx: float, cy: float, r: float) -> str:
+        """Closed SVG path for a circle (two half-arcs)."""
+        f = self._fmt
+        return (f"M {f(cx - r)},{f(cy)} "
+                f"A {f(r)},{f(r)} 0 1 1 {f(cx + r)},{f(cy)} "
+                f"A {f(r)},{f(r)} 0 1 1 {f(cx - r)},{f(cy)} Z")
+
+    def rounded_rect_path(self, cx: float, cy: float, w: float, h: float, r: float = 0.0) -> str:
+        """Closed SVG path for a w x h rectangle centred on (cx, cy) with corner radius r.
+
+        r is clamped to min(w, h) / 2; with r == h/2 the result is a stadium/oval slot.
+        Absolute coordinates are used throughout (no relative h/v/a commands), so the
+        path is robust when re-processed by Inkscape or other tools.
+        """
+        f = self._fmt
+        r = max(0.0, min(r, w / 2.0, h / 2.0))
+        l, rt, t, b = cx - w / 2.0, cx + w / 2.0, cy - h / 2.0, cy + h / 2.0
+        if r <= 1e-9:
+            return (f"M {f(l)},{f(t)} L {f(rt)},{f(t)} L {f(rt)},{f(b)} "
+                    f"L {f(l)},{f(b)} Z")
+        eps = 1e-9
+        d = [f"M {f(l + r)},{f(t)}"]
+        if w - 2 * r > eps:
+            d.append(f"L {f(rt - r)},{f(t)}")
+        d.append(f"A {f(r)},{f(r)} 0 0 1 {f(rt)},{f(t + r)}")
+        if h - 2 * r > eps:
+            d.append(f"L {f(rt)},{f(b - r)}")
+        d.append(f"A {f(r)},{f(r)} 0 0 1 {f(rt - r)},{f(b)}")
+        if w - 2 * r > eps:
+            d.append(f"L {f(l + r)},{f(b)}")
+        d.append(f"A {f(r)},{f(r)} 0 0 1 {f(l)},{f(b - r)}")
+        if h - 2 * r > eps:
+            d.append(f"L {f(l)},{f(t + r)}")
+        d.append(f"A {f(r)},{f(r)} 0 0 1 {f(l + r)},{f(t)} Z")
+        return ' '.join(d)
+
+    def _hole_target_names(self, X: float, Y: float) -> List[str]:
+        """Piece names that may carry the hole, in order of preference.
+
+        Vertical walls come in two pairs: front/back (X wide) and left/right (Y wide);
+        both are the same height, so the pair with the larger of X, Y is the 'big' one.
+        Ties go to front/back.
+        """
+        frontback, leftright = ['bk', 'ft'], ['lt', 'rt']
+        big, small = (frontback, leftright) if X >= Y else (leftright, frontback)
+        return big if self.hole_side == HoleSide.BIG else small
+
+    def _validate_hole(self) -> None:
+        if self.hole_type not in HoleType.ALL:
+            raise ValueError(f"Hole type must be one of {HoleType.ALL}, got {self.hole_type!r}")
+        if self.hole_type == HoleType.NONE:
+            return
+        if self.hole_side not in HoleSide.ALL:
+            raise ValueError(f"Hole side must be one of {HoleSide.ALL}, got {self.hole_side!r}")
+        if self.hole_type == HoleType.ROUND:
+            if self.hole_diameter <= self.kerf:
+                raise ValueError("Hole diameter must be larger than the kerf")
+        else:
+            if min(self.hole_width, self.hole_height) <= self.kerf:
+                raise ValueError("Hole width/height must be larger than the kerf")
+            if self.hole_radius < 0:
+                raise ValueError("Hole corner radius cannot be negative")
+
+    def add_hole(self, name: str, body: Tuple[float, float, float, float]) -> None:
+        """Add the entrance hole to the plate 'name'.
+
+        body = (left, top, right, bottom): the flat plate itself, tabs excluded, in SVG
+        coordinates. hole_x is measured from the left edge and hole_y from the bottom edge
+        (i.e. the edge that is lower in the SVG, which sits on the floor when assembled).
+        Kerf is compensated: the hole is drawn smaller by one kerf so that the cut hole
+        ends up at its nominal size.
+        """
+        left, top, right, bottom = body
+        pw, ph = right - left, bottom - top
+        if self.hole_type == HoleType.ROUND:
+            w = h = self.hole_diameter
+        else:
+            w, h = self.hole_width, self.hole_height
+        # clearance from plate edge: at least one material thickness (joint notches live there)
+        margin = self.thickness
+        cx_rel = pw / 2.0 if self.hole_x is None else float(self.hole_x)
+        cy_rel = ph / 2.0 if self.hole_y is None else float(self.hole_y)
+        if (cx_rel - w / 2.0 < margin or cx_rel + w / 2.0 > pw - margin or
+                cy_rel - h / 2.0 < margin or cy_rel + h / 2.0 > ph - margin):
+            raise ValueError(
+                f"Hole ({w:g} x {h:g} mm, centre {cx_rel:g},{cy_rel:g} from left/bottom) does not fit "
+                f"in the '{name}' wall plate ({pw:g} x {ph:g} mm) with {margin:g} mm clearance to the "
+                f"edges. Adjust --hole-x/--hole-y or the hole size.")
+        cx = left + cx_rel
+        cy = bottom - cy_rel
+        k = self.kerf
+        if self.hole_type == HoleType.ROUND:
+            d = self.round_hole_path(cx, cy, (w - k) / 2.0)
+        else:
+            d = self.rounded_rect_path(cx, cy, w - k, h - k, max(0.0, self.hole_radius - k / 2.0))
+        self.paths.append(self.get_line_path(d))
 
     def dimple_str(self, tabVector, vectorX, vectorY, dirX, dirY, dirxN, diryN, ddir, isTab):
         ds = ''
@@ -381,6 +495,7 @@ class BoxMakerCore:
         """
         # Validate input parameters first
         self._validate_dimensions()
+        self._validate_hole()
         
         # Clear previous paths
         self.paths = []
@@ -543,26 +658,26 @@ class BoxMakerCore:
             if not hasRt:
                 reduceOffsets(cc, 2, 0, 0, 1)
             if hasBk:
-                pieces.append([cc[1], rr[2], X, Z, bkTabInfo, bkTabbed, bkFace])
+                pieces.append([cc[1], rr[2], X, Z, bkTabInfo, bkTabbed, bkFace, 'bk'])
             if hasLt:
-                pieces.append([cc[0], rr[1], Z, Y, ltTabInfo, ltTabbed, ltFace])
+                pieces.append([cc[0], rr[1], Z, Y, ltTabInfo, ltTabbed, ltFace, 'lt'])
             if hasBm:
-                pieces.append([cc[1], rr[1], X, Y, bmTabInfo, bmTabbed, bmFace])
+                pieces.append([cc[1], rr[1], X, Y, bmTabInfo, bmTabbed, bmFace, 'bm'])
             if hasRt:
-                pieces.append([cc[2], rr[1], Z, Y, rtTabInfo, rtTabbed, rtFace])
+                pieces.append([cc[2], rr[1], Z, Y, rtTabInfo, rtTabbed, rtFace, 'rt'])
             if hasTp:
-                pieces.append([cc[3], rr[1], X, Y, tpTabInfo, tpTabbed, tpFace])
+                pieces.append([cc[3], rr[1], X, Y, tpTabInfo, tpTabbed, tpFace, 'tp'])
             if hasFt:
-                pieces.append([cc[1], rr[0], X, Z, ftTabInfo, ftTabbed, ftFace])
+                pieces.append([cc[1], rr[0], X, Z, ftTabInfo, ftTabbed, ftFace, 'ft'])
         elif self.style == 2:  # 3 Piece Layout
             rr = deepcopy([row0, row1y])
             cc = deepcopy([col0, col1z])
             if hasBk:
-                pieces.append([cc[1], rr[1], X, Z, bkTabInfo, bkTabbed, bkFace])
+                pieces.append([cc[1], rr[1], X, Z, bkTabInfo, bkTabbed, bkFace, 'bk'])
             if hasLt:
-                pieces.append([cc[0], rr[0], Z, Y, ltTabInfo, ltTabbed, ltFace])
+                pieces.append([cc[0], rr[0], Z, Y, ltTabInfo, ltTabbed, ltFace, 'lt'])
             if hasBm:
-                pieces.append([cc[1], rr[0], X, Y, bmTabInfo, bmTabbed, bmFace])
+                pieces.append([cc[1], rr[0], X, Y, bmTabInfo, bmTabbed, bmFace, 'bm'])
         elif self.style == 3:  # Inline(compact) Layout
             rr = deepcopy([row0])
             cc = deepcopy([col0, col1x, col2xx, col3xxz, col4, col5])
@@ -577,21 +692,22 @@ class BoxMakerCore:
             if not hasBk:
                 reduceOffsets(cc, 4, 1, 0, 0)
             if hasBk:
-                pieces.append([cc[4], rr[0], X, Z, bkTabInfo, bkTabbed, bkFace])
+                pieces.append([cc[4], rr[0], X, Z, bkTabInfo, bkTabbed, bkFace, 'bk'])
             if hasLt:
-                pieces.append([cc[2], rr[0], Z, Y, ltTabInfo, ltTabbed, ltFace])
+                pieces.append([cc[2], rr[0], Z, Y, ltTabInfo, ltTabbed, ltFace, 'lt'])
             if hasTp:
-                pieces.append([cc[0], rr[0], X, Y, tpTabInfo, tpTabbed, tpFace])
+                pieces.append([cc[0], rr[0], X, Y, tpTabInfo, tpTabbed, tpFace, 'tp'])
             if hasBm:
-                pieces.append([cc[1], rr[0], X, Y, bmTabInfo, bmTabbed, bmFace])
+                pieces.append([cc[1], rr[0], X, Y, bmTabInfo, bmTabbed, bmFace, 'bm'])
             if hasRt:
-                pieces.append([cc[3], rr[0], Z, Y, rtTabInfo, rtTabbed, rtFace])
+                pieces.append([cc[3], rr[0], Z, Y, rtTabInfo, rtTabbed, rtFace, 'rt'])
             if hasFt:
-                pieces.append([cc[5], rr[0], X, Z, ftTabInfo, ftTabbed, ftFace])
+                pieces.append([cc[5], rr[0], X, Z, ftTabInfo, ftTabbed, ftFace, 'ft'])
 
         # Generate each piece
         initOffsetX = 0
         initOffsetY = 0
+        hole_target = None
         
         for idx, piece in enumerate(pieces):
             (xs, xx, xy, xz) = piece[0]
@@ -630,6 +746,20 @@ class BoxMakerCore:
                 self.side(group_id, (x, y + dy), (d, -c), (d, a), dtabs * (-self.thickness if d else self.thickness), ctabs, dy, (0, -1), d, 0, 0, 0)
             else:
                 self.side(group_id, (x, y + dy), (d, -c), (d, a), dtabs * (-self.thickness if d else self.thickness), ctabs, dy, (0, -1), d, 0, (self.keydivfloor | wall) * (self.keydivwalls | floor) * self.divy * xholes * dtabs, xspacing)
+
+            # Entrance hole (nest box): pick the wall plate that receives it
+            if self.hole_type != HoleType.NONE:
+                if hole_target is None:
+                    present = [p[7] for p in pieces]
+                    hole_target = next((n for n in self._hole_target_names(X, Y) if n in present), None)
+                    if hole_target is None:
+                        raise ValueError(
+                            f"No '{self.hole_side}' wall exists for this box type/layout, "
+                            f"so the hole cannot be placed. Try --hole-side "
+                            f"{'small' if self.hole_side == HoleSide.BIG else 'big'} or another box type.")
+                if piece[7] == hole_target:
+                    t = self.thickness
+                    self.add_hole(hole_target, (x + d * t, y + a * t, x + dx - b * t, y + dy - c * t))
 
             # Handle dividers if this is the first piece (template)
             if idx == 0:

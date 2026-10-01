@@ -36,17 +36,63 @@ Copy `boxmaker.py`, `boxmaker_core.py`, and `boxmaker.inx` to your Inkscape exte
 ### As CLI Tool
 ```bash
 # Basic box (100x80x50mm, 3mm material, laser cutting)
-python boxmaker.py --length 100 --width 80 --height 50 --thickness 3 --kerf 0.1 --output my_box.svg
+python boxmaker.py --preset generic --length 100 --width 80 --height 50 --thickness 3 --kerf 0.1 --output my_box.svg
 
 # CNC milling with dogbone cuts
-python boxmaker.py --length 100 --width 80 --height 50 --thickness 3 --tabtype 1 --output cnc_box.svg
+python boxmaker.py --preset generic --length 100 --width 80 --height 50 --thickness 3 --tabtype 1 --output cnc_box.svg
 
 # Box with dividers
-python boxmaker.py --length 120 --width 100 --height 60 --div-l 2 --div-w 1 --output box_with_dividers.svg
+python boxmaker.py --preset generic --length 120 --width 100 --height 60 --div-l 2 --div-w 1 --output box_with_dividers.svg
 
 # Thick material (6mm)
-python boxmaker.py --length 150 --width 100 --height 75 --thickness 6 --kerf 0.2 --tab 25 --output thick_box.svg
+python boxmaker.py --preset generic --length 150 --width 100 --height 75 --thickness 6 --kerf 0.2 --tab 25 --output thick_box.svg
 ```
+
+### Bird nest boxes: entrance hole and the swift default
+
+Run with **no options** and you get a nest box for the common swift (*Apus apus*):
+inside 345 x 175 x 175 mm, 12 mm plywood, and a 65 x 28 mm fully rounded (oval) entrance in a
+long wall, near one end, 41 mm above the floor (nest cup goes at the far end). These are the
+dimensions recommended by mursejlerne.dk / DOF and, for the 28 x 65 mm entrance, by Swift
+Conservation, Action for Swifts and the RSPB.
+
+```bash
+python boxmaker.py -o swift_box.svg                       # swift box
+python boxmaker.py --preset generic --length 100 ...      # previous plain-box defaults, no hole
+python boxmaker.py --no-hole -o swift_box_no_hole.svg     # swift dimensions, no hole
+
+# Round 32 mm entrance (blue tit) high in the big wall, centred horizontally
+python boxmaker.py --length 120 --width 120 --height 250 --hole round --hole-diameter 32 \
+    --hole-x center --hole-y 170 -o tit_box.svg
+
+# Rectangular entrance with 8 mm rounded corners in the small end wall
+python boxmaker.py --hole rect --hole-width 60 --hole-height 40 --hole-radius 8 \
+    --hole-side small --hole-x center --hole-y 60 -o box.svg
+```
+
+Hole options:
+```
+--hole {none,round,rect}   Hole type (rect = rectangle with optional rounded corners)
+--no-hole                  Same as --hole none
+--hole-side {big,small}    big = the larger vertical walls (long walls), small = the other pair
+--hole-x MM|center         Hole centre from the LEFT edge of the wall plate
+--hole-y MM|center         Hole centre ABOVE the BOTTOM edge of the wall plate
+--hole-diameter MM         Round hole diameter
+--hole-width/--hole-height MM   Rectangular hole size
+--hole-radius MM           Corner radius; half of the smaller side gives an oval slot
+--preset {swift,generic}   Where unspecified values come from (default: swift)
+--outside                  Dimensions are outside measurements (swift default is --inside)
+```
+
+Notes:
+- Positions refer to the flat wall plate as drawn (tabs excluded). For the wall plates the bottom
+  edge is the one that sits on the floor panel, so `--hole-y` is the height above the inside floor.
+  Assemble with the plate oriented as drawn.
+- Only one wall gets a hole (the back plate of the chosen pair, or the first available one).
+- The hole must stay at least one material thickness away from the plate edges; otherwise the
+  command stops with an explanatory error. The hole is kerf-compensated (drawn one kerf smaller).
+- The Inkscape dialog has the same options in a new "Entrance hole" section (default: none;
+  -1 = centred).
 
 ### CLI Options
 ```

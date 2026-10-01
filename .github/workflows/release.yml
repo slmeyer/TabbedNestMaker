@@ -42,13 +42,13 @@ jobs:
         echo "✨ Generating showcase examples..."
         
         # Small precision box
-        python boxmaker.py --length 80 --width 60 --height 40 --thickness 3 --tab 9 --kerf 0.1 --output release_validation/precision_small_box.svg
+        python boxmaker.py --preset generic --length 80 --width 60 --height 40 --thickness 3 --tab 9 --kerf 0.1 --output release_validation/precision_small_box.svg
         
         # Medium workshop box
-        python boxmaker.py --length 250 --width 200 --height 150 --thickness 6 --tab 20 --div-l 3 --div-w 2 --output release_validation/workshop_organizer.svg
+        python boxmaker.py --preset generic --length 250 --width 200 --height 150 --thickness 6 --tab 20 --div-l 3 --div-w 2 --output release_validation/workshop_organizer.svg
         
         # Large storage box
-        python boxmaker.py --length 500 --width 400 --height 300 --thickness 9 --tab 30 --div-l 2 --output release_validation/large_storage.svg
+        python boxmaker.py --preset generic --length 500 --width 400 --height 300 --thickness 9 --tab 30 --div-l 2 --output release_validation/large_storage.svg
         
         echo "✓ Showcase examples generated successfully"
         

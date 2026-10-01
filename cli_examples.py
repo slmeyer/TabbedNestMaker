@@ -42,40 +42,63 @@ def main():
     examples = [
         {
             'description': "1. Basic 100x80x50mm box for laser cutting",
-            'args': ['--length', '100', '--width', '80', '--height', '50', 
+            'args': ['--preset', 'generic', '--length', '100', '--width', '80', '--height', '50', 
                     '--thickness', '3', '--kerf', '0.1', '--tab', '15', '--tabtype', '0',
                     '--output', 'test_assets/basic_laser_box.svg']
         },
         {
             'description': "2. Same box but for CNC milling (with dogbone cuts)",
-            'args': ['--length', '100', '--width', '80', '--height', '50', 
+            'args': ['--preset', 'generic', '--length', '100', '--width', '80', '--height', '50', 
                     '--thickness', '3', '--kerf', '0.1', '--tab', '15', '--tabtype', '1',
                     '--output', 'test_assets/basic_cnc_box.svg']
         },
         {
             'description': "3. Box with dividers (2 length, 1 width)",
-            'args': ['--length', '120', '--width', '100', '--height', '60', 
+            'args': ['--preset', 'generic', '--length', '120', '--width', '100', '--height', '60', 
                     '--thickness', '3', '--kerf', '0.1', '--tab', '20', '--div-l', '2', '--div-w', '1',
                     '--output', 'test_assets/box_with_dividers.svg']
         },
         {
             'description': "4. Thick material box (6mm plywood)",
-            'args': ['--length', '150', '--width', '100', '--height', '75', 
+            'args': ['--preset', 'generic', '--length', '150', '--width', '100', '--height', '75', 
                     '--thickness', '6', '--kerf', '0.2', '--tab', '25',
                     '--output', 'test_assets/thick_material_box.svg']
         },
         {
             'description': "5. Inside dimensions box (interior 100x80x50)",
-            'args': ['--length', '100', '--width', '80', '--height', '50', 
+            'args': ['--preset', 'generic', '--length', '100', '--width', '80', '--height', '50', 
                     '--thickness', '3', '--kerf', '0.1', '--tab', '15', '--inside',
                     '--output', 'test_assets/inside_dimensions_box.svg']
         },
         {
             'description': "6. Compact layout style",
-            'args': ['--length', '100', '--width', '80', '--height', '50', 
+            'args': ['--preset', 'generic', '--length', '100', '--width', '80', '--height', '50', 
                     '--thickness', '3', '--kerf', '0.1', '--tab', '15', '--style', '3',
                     '--output', 'test_assets/compact_layout_box.svg']
-        }    ]
+        },
+        {
+            'description': "7. DEFAULT: common swift nest box (inside 345x175x175, 12mm ply, 65x28mm oval entrance)",
+            'args': ['--output', 'test_assets/swift_box_default.svg']
+        },
+        {
+            'description': "8. Swift box, entrance in the small end wall, centred, as a plain 65x28 rectangle",
+            'args': ['--hole-side', 'small', '--hole-x', 'center', '--hole-y', '60',
+                    '--hole-radius', '0', '--output', 'test_assets/swift_box_small_side.svg']
+        },
+        {
+            'description': "9. Tit box: 32mm round entrance high in the big wall",
+            'args': ['--length', '120', '--width', '120', '--height', '250', '--thickness', '12',
+                    '--hole', 'round', '--hole-diameter', '32', '--hole-x', 'center', '--hole-y', '170',
+                    '--output', 'test_assets/tit_box_round_hole.svg']
+        },
+        {
+            'description': "10. Rectangular entrance with 8mm rounded corners",
+            'args': ['--preset', 'generic', '--length', '200', '--width', '150', '--height', '120',
+                    '--thickness', '6', '--tab', '20', '--hole', 'rect', '--hole-width', '60',
+                    '--hole-height', '40', '--hole-radius', '8', '--hole-x', 'center', '--hole-y', '60',
+                    '--output', 'test_assets/rounded_rect_hole.svg']
+        }
+    ]
     
     success_count = 0
     

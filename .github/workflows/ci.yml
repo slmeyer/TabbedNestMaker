@@ -39,7 +39,7 @@ jobs:
     - name: Test basic CLI functionality
       run: |
         echo "🔧 Testing basic CLI functionality..."
-        python boxmaker.py --length 100 --width 80 --height 50 --thickness 3 --tab 12 --output test_ci.svg
+        python boxmaker.py --preset generic --length 100 --width 80 --height 50 --thickness 3 --tab 12 --output test_ci.svg
         if [ -f "test_ci.svg" ]; then
           echo "✓ CLI generated SVG successfully"
         else
@@ -115,4 +115,4 @@ jobs:
     - name: Test CLI
       run: |
         echo "🔧 Testing CLI on ${{ matrix.os }}..."
-        python boxmaker.py --length 150 --width 120 --height 80 --thickness 6 --tab 18 --output platform_test.svg
+        python boxmaker.py --preset generic --length 150 --width 120 --height 80 --thickness 6 --tab 18 --output platform_test.svg

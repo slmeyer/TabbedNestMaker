@@ -375,6 +375,102 @@ def test_large_box_big_tabs():
         return False
 
 
+def _swift_core(**over):
+    from boxmaker_constants import SWIFT_PRESET
+    core = BoxMakerCore()
+    params = dict(SWIFT_PRESET)
+    params['inside'] = 1
+    params.update(over)
+    core.set_parameters(**params)
+    return core
+
+
+def _closed_paths(core):
+    return [p['data'] for p in core.paths if p['data'].rstrip().endswith('Z')]
+
+
+def test_swift_preset_hole():
+    """Swift preset: exactly one oval 65x28 entrance (kerf compensated)"""
+    print("Testing swift preset entrance hole...")
+    core = _swift_core()
+    core.generate_box()
+    holes = _closed_paths(core)
+    if len(holes) != 1 or holes[0].count(' A ') != 4:
+        print(f"✗ expected one rounded hole, got {holes}")
+        return False
+    import re
+    xs = [float(x) for x in re.findall(r'(?:M|L|[01] [01] [01]) (-?[\d.]+),', holes[0])]
+    # arcs end points span the full 65 mm minus one kerf (0.1)
+    if abs((max(xs) - min(xs)) - (65 - 0.1)) > 0.01:
+        print(f"✗ unexpected hole length {max(xs) - min(xs)}")
+        return False
+    print("✓ Swift entrance hole test passed")
+    return True
+
+
+def test_hole_variants():
+    """Round / rect / rounded rect, sides, and placement errors"""
+    print("Testing hole variants...")
+    ok = True
+    core = BoxMakerCore()
+    for r, arcs in ((0, 0), (3, 4), (99, 4)):   # oversize radius is clamped
+        if core.rounded_rect_path(0, 0, 20, 10, r).count('A') != arcs:
+            print(f"✗ radius {r}: expected {arcs} arcs"); ok = False
+    for kw in (dict(hole_type='round', hole_diameter=32, hole_x=None, hole_y=None),
+               dict(hole_type='rect', hole_width=50, hole_height=40, hole_radius=0, hole_x=None, hole_y=None),
+               dict(hole_side='small', hole_type='round', hole_diameter=40, hole_x=None, hole_y=None)):
+        c = _swift_core(**kw)
+        c.generate_box()
+        if len(_closed_paths(c)) != 1:
+            print(f"✗ {kw}: expected one hole"); ok = False
+    c = _swift_core(hole_type='none')
+    c.generate_box()
+    if _closed_paths(c):
+        print("✗ hole_type none must not add a hole"); ok = False
+    for kw in (dict(hole_y=400), dict(hole_x=2), dict(hole_width=500), dict(boxtype=6), dict(hole_type='star')):
+        try:
+            _swift_core(**kw).generate_box()
+            print(f"✗ {kw}: should have raised ValueError"); ok = False
+        except ValueError:
+            pass
+    print("✓ Hole variants test passed" if ok else "✗ Hole variants test failed")
+    return ok
+
+
+def test_hole_side_selection():
+    """'big' picks the larger wall pair, 'small' the other one"""
+    print("Testing big/small wall selection...")
+    core = BoxMakerCore()
+    core.set_parameters(hole_side='big')
+    ok = core._hole_target_names(300, 100)[0] in ('bk', 'ft') and core._hole_target_names(100, 300)[0] in ('lt', 'rt')
+    core.set_parameters(hole_side='small')
+    ok = ok and core._hole_target_names(300, 100)[0] in ('lt', 'rt') and core._hole_target_names(100, 300)[0] in ('bk', 'ft')
+    print("✓ Wall selection test passed" if ok else "✗ Wall selection test failed")
+    return ok
+
+
+def test_cli_defaults_are_swift_box():
+    """CLI with no options = swift box; --preset generic = old plain box"""
+    import subprocess
+    print("Testing CLI defaults...")
+    here = str(Path(__file__).parent)
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, 'd.svg')
+        def run(*a):
+            return subprocess.run([sys.executable, 'boxmaker.py', *a, '-o', out], cwd=here,
+                                  capture_output=True, text=True)
+        r = run()
+        if r.returncode != 0 or ' A ' not in open(out).read():
+            print("✗ default run should give an entrance hole:", r.stderr); return False
+        r = run('--preset', 'generic')
+        if r.returncode != 0 or ' A ' in open(out).read():
+            print("✗ generic preset should have no hole:", r.stderr); return False
+        if run('--hole-y', '999').returncode == 0:
+            print("✗ impossible hole position should fail"); return False
+    print("✓ CLI defaults test passed")
+    return True
+
+
 def run_all_tests():
     """Run all tests"""
     print("Running BoxMaker tests...\n")
@@ -390,7 +486,11 @@ def run_all_tests():
         test_save_test_files,
         test_realistic_compartment_box,
         test_thin_tabs,
-        test_large_box_big_tabs
+        test_large_box_big_tabs,
+        test_swift_preset_hole,
+        test_hole_variants,
+        test_hole_side_selection,
+        test_cli_defaults_are_swift_box
     ]
     
     passed = 0
