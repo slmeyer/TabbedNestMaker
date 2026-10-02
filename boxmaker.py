@@ -91,7 +91,7 @@ def create_cli_parser():
     box.add_argument('--height', type=float, default=None, help='Height of box (mm) [swift: 175]')
     box.add_argument('--thickness', type=float, default=None, help='Material thickness (mm) [swift: 12]')
     box.add_argument('--kerf', type=float, default=None, help='Kerf width (mm) [swift: 0.1, generic: 0.5]')
-    box.add_argument('--tab', type=float, default=None, help='Tab width (mm) [25]')
+    box.add_argument('--tab', type=float, default=None, help='Tab width (mm) [swift: 30, generic: 25]')
     box.add_argument('--style', type=int, choices=[1, 2, 3], default=LayoutStyle.SEPARATED, help='Layout style')
     box.add_argument('--boxtype', type=int, choices=range(1, 7), default=BoxType.FULL_BOX, help='Box type')
     box.add_argument('--tabtype', type=int, choices=[0, 1], default=TabType.LASER, help='Tab type (0=laser, 1=mill)')
@@ -132,6 +132,18 @@ def create_cli_parser():
     hole.add_argument('--hole-radius', type=float, default=None,
                       help='Corner radius of a rect hole (mm); half the smaller side gives a '
                            'fully rounded oval slot [swift: 14, generic: 0]')
+
+    screws = parser.add_argument_group(
+        'screw holes',
+        'Pilot holes through the middle of selected joint tabs (nearest each corner of every '
+        'tabbed edge, plus the middle of edges longer than 200 mm). Only made when the material '
+        'is thicker than 9 mm; otherwise skipped with a note.')
+    screws.add_argument('--screws', dest='screw_holes', action='store_true', default=None,
+                        help='Add screw pilot holes [swift default]')
+    screws.add_argument('--no-screws', dest='screw_holes', action='store_false',
+                        help='No screw holes [generic default]')
+    screws.add_argument('--screw-diameter', type=float, default=2.5,
+                        help='Pilot hole diameter (mm)')
     return parser
 
 def resolve_cli_options(args):
@@ -159,7 +171,7 @@ def main():
     
     # Simple check: if we have CLI-style arguments, run in CLI mode
     cli_args = ['--length', '--width', '--height', '--thickness', '--kerf', '--tab', '--output',
-                '--preset', '--hole', '--no-hole', '--outside']
+                '--preset', '--hole', '--no-hole', '--outside', '--screws', '--no-screws']
     is_cli = any(arg in sys.argv for arg in cli_args)
     
     if not INKSCAPE_AVAILABLE or is_cli:
@@ -191,11 +203,15 @@ def main():
             hole_radius=opts['hole_radius'],
             hole_x=opts['hole_x'],
             hole_y=opts['hole_y'],
+            screw_holes=opts['screw_holes'],
+            screw_diameter=args.screw_diameter,
         )
         
         try:
             # Generate SVG
             svg_content = core.generate_svg()
+            for note in core.messages:
+                print(f"Note: {note}", file=sys.stderr)
             
             # Write to file
             with open(args.output, 'w') as f:
@@ -303,6 +319,10 @@ if INKSCAPE_AVAILABLE:
               dest='hole_x',default=-1.0,help='Hole centre from left edge (negative = centred)')
             self.arg_parser.add_argument('--hole_y',action='store',type=float,
               dest='hole_y',default=-1.0,help='Hole centre from bottom edge (negative = centred)')
+            self.arg_parser.add_argument('--screw_holes',action='store',type=inkex.utils.Boolean,
+              dest='screw_holes',default=False,help='Screw pilot holes in tabs (thickness > 9)')
+            self.arg_parser.add_argument('--screw_diameter',action='store',type=float,
+              dest='screw_diameter',default=2.5,help='Screw pilot hole diameter')
             self.arg_parser.add_argument('--optimize',action='store',type=inkex.utils.Boolean,
               dest='optimize',default=True,help='Optimize paths')
 
@@ -336,6 +356,8 @@ if INKSCAPE_AVAILABLE:
             core.div_w = self.options.div_w
             core.keydiv = self.options.keydiv
             core.optimize = self.options.optimize
+            core.screw_holes = self.options.screw_holes
+            core.screw_diameter = self.svg.unittouu(str(self.options.screw_diameter) + core.unit)
 
             # Entrance hole (all lengths converted to user units like the other dimensions)
             u = lambda v: self.svg.unittouu(str(v) + core.unit)

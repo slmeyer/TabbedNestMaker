@@ -110,6 +110,8 @@
 			<param name="hole_radius" type="float" precision="2" min="0.0" max="10000.0" _gui-text="    Rectangle: corner radius">14.0</param>
 			<param name="hole_x" type="float" precision="2" min="-1.0" max="10000.0" _gui-text="    Centre from left edge (-1 = centred)">-1.0</param>
 			<param name="hole_y" type="float" precision="2" min="-1.0" max="10000.0" _gui-text="    Centre above bottom edge (-1 = centred)">-1.0</param>
+			<param name="screw_holes" type="boolean" _gui-text="    Screw pilot holes in tabs (thickness &gt; 9)">false</param>
+			<param name="screw_diameter" type="float" precision="2" min="0.0" max="100.0" _gui-text="    Screw pilot hole diameter">2.5</param>
 		</vbox>
 	</hbox> 
 	<effect>

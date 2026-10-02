@@ -380,6 +380,7 @@ def _swift_core(**over):
     core = BoxMakerCore()
     params = dict(SWIFT_PRESET)
     params['inside'] = 1
+    params['screw_holes'] = False      # screw holes have their own tests
     params.update(over)
     core.set_parameters(**params)
     return core
@@ -471,6 +472,29 @@ def test_cli_defaults_are_swift_box():
     return True
 
 
+def test_screw_holes():
+    """Screw pilot holes: tabs near corners + middle of long edges, only for thick material"""
+    print("Testing screw holes...")
+    ok = True
+    core = _swift_core(screw_holes=True)
+    core.generate_box()
+    n = len(_closed_paths(core)) - 1            # minus the entrance hole
+    # front/back: 2 tabbed long edges x 3 holes; end walls: 4 tabbed short edges x 2 holes
+    if n != 2 * 2 * 3 + 2 * 4 * 2:
+        print(f"✗ expected 28 screw holes, got {n}"); ok = False
+    core = _swift_core(screw_holes=True, thickness=9.0)
+    core.generate_box()
+    if len(_closed_paths(core)) != 1 or not core.messages:
+        print("✗ thickness <= 9 mm must skip screw holes with a note"); ok = False
+    try:
+        _swift_core(screw_holes=True, screw_diameter=8).generate_box()
+        print("✗ oversize screw hole should raise"); ok = False
+    except ValueError:
+        pass
+    print("✓ Screw holes test passed" if ok else "✗ Screw holes test failed")
+    return ok
+
+
 def run_all_tests():
     """Run all tests"""
     print("Running BoxMaker tests...\n")
@@ -490,7 +514,8 @@ def run_all_tests():
         test_swift_preset_hole,
         test_hole_variants,
         test_hole_side_selection,
-        test_cli_defaults_are_swift_box
+        test_cli_defaults_are_swift_box,
+        test_screw_holes
     ]
     
     passed = 0

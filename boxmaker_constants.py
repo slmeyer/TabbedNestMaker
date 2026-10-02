@@ -91,7 +91,7 @@ SWIFT_PRESET = {
     'height': 175.0,        # inside height
     'thickness': 12.0,      # 12-15 mm exterior/marine ply is recommended
     'kerf': 0.1,
-    'tab': 25.0,
+    'tab': 30.0,            # gives 5 tabs on the long edges, so there is a true centre tab
     'inside': True,
     'hole_type': 'rect',
     'hole_side': 'big',     # entrance in a long wall
@@ -100,6 +100,7 @@ SWIFT_PRESET = {
     'hole_radius': 14.0,    # = height / 2 -> the oval/stadium slot used on swift boxes
     'hole_x': 60.0,         # entrance near one end, nest cup goes at the far end
     'hole_y': 55.0,         # centre 55 mm above inside floor (lower edge 41 mm; max 50 mm advised)
+    'screw_holes': True,    # pilot holes for stainless screws (only if thickness > 9 mm)
 }
 
 # Previous generic defaults (--preset generic)
@@ -118,4 +119,5 @@ GENERIC_PRESET = {
     'hole_radius': 0.0,
     'hole_x': None,         # None = centred
     'hole_y': None,
+    'screw_holes': False,
 }

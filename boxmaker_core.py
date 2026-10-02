@@ -58,6 +58,12 @@ class BoxMakerCore:
         self.hole_radius = 0.0           # rect hole corner radius
         self.hole_x = None               # centre, from left edge of plate (None = centred)
         self.hole_y = None               # centre, from bottom edge of plate (None = centred)
+        # Pilot holes for screws through the joint tabs (only for thick material)
+        self.screw_holes = False
+        self.screw_diameter = 2.5             # pilot hole diameter (mm)
+        self.screw_min_thickness = 9.0        # no screw holes for material this thin or thinner
+        self.screw_middle_min_length = 200.0  # edges longer than this also get a middle screw
+        self.messages = []                    # notes for the user (e.g. why holes were skipped)
         # Internal state
         self.linethickness = 1
         self.paths: List[str] = []
@@ -276,6 +282,69 @@ class BoxMakerCore:
         else:
             d = self.rounded_rect_path(cx, cy, w - k, h - k, max(0.0, self.hole_radius - k / 2.0))
         self.paths.append(self.get_line_path(d))
+
+    # ------------------------------------------------------------------
+    # Screw pilot holes
+    # ------------------------------------------------------------------
+    def _validate_screws(self) -> None:
+        if not self.screw_holes or self.thickness <= self.screw_min_thickness:
+            return      # nothing to draw (generate_box adds a note for thin material)
+        if self.screw_diameter <= self.kerf:
+            raise ValueError("Screw hole diameter must be larger than the kerf")
+        if self.screw_diameter > self.thickness / 2.0:
+            raise ValueError(f"Screw hole diameter ({self.screw_diameter:g}) must not exceed half the "
+                             f"material thickness ({self.thickness / 2.0:g})")
+
+    def _tab_centres(self, length: float) -> List[float]:
+        """Centres of the tabs along a tabbed edge, measured from the edge start.
+
+        Mirrors the layout computed in side() (gap first and last, kerf-corrected)."""
+        divisions = int(length / self.nomTab)
+        if not divisions % 2:
+            divisions -= 1
+        tabs = (divisions - 1) // 2
+        if tabs < 1:
+            return []
+        if self.equalTabs:
+            gap = tab = length / divisions
+        else:
+            tab = self.nomTab
+            gap = (length - tabs * self.nomTab) / (divisions - tabs)
+        gap -= self.kerf
+        tab += self.kerf
+        return [k * gap + (k - 1) * tab + tab / 2.0 for k in range(1, tabs + 1)]
+
+    def add_screw_holes(self, x, y, dx, dy, bits, tabbed) -> None:
+        """Pilot holes in the middle of selected tabs of one piece.
+
+        Per tabbed edge: the tab nearest each corner, plus the tab nearest the middle when the
+        edge is longer than screw_middle_min_length. A hole sits half a thickness in from the
+        tab tip, so the screw runs through the tab's thickness into the edge of the mating
+        panel, in the middle of that panel's thickness.
+        """
+        t = self.thickness
+        r = (self.screw_diameter - self.kerf) / 2.0
+        a, b, c, d = bits
+        atabs, btabs, ctabs, dtabs = tabbed
+        # (active, length, position of a point at distance 'along' from the edge start)
+        edges = [
+            (a and atabs, dx, lambda s: (x + s, y + t / 2.0)),
+            (b and btabs, dy, lambda s: (x + dx - t / 2.0, y + s)),
+            (c and ctabs, dx, lambda s: (x + dx - s, y + dy - t / 2.0)),
+            (d and dtabs, dy, lambda s: (x + t / 2.0, y + dy - s)),
+        ]
+        for active, length, point in edges:
+            if not active:
+                continue
+            centres = self._tab_centres(length)
+            if not centres:
+                continue
+            chosen = {0, len(centres) - 1}
+            if length > self.screw_middle_min_length:
+                chosen.add((len(centres) - 1) // 2)
+            for i in sorted(chosen):
+                cx, cy = point(centres[i])
+                self.paths.append(self.get_line_path(self.round_hole_path(cx, cy, r)))
 
     def dimple_str(self, tabVector, vectorX, vectorY, dirX, dirY, dirxN, diryN, ddir, isTab):
         ds = ''
@@ -496,9 +565,11 @@ class BoxMakerCore:
         # Validate input parameters first
         self._validate_dimensions()
         self._validate_hole()
+        self._validate_screws()
         
         # Clear previous paths
         self.paths = []
+        self.messages = []
         self.circles = []
         
         # Setup global variables (converted from original)
@@ -708,7 +779,15 @@ class BoxMakerCore:
         initOffsetX = 0
         initOffsetY = 0
         hole_target = None
-        
+        screws_ok = self.screw_holes
+        if self.screw_holes and self.thickness <= self.screw_min_thickness:
+            screws_ok = False
+            self.messages.append(f"Screw holes skipped: material thickness {self.thickness:g} mm is not "
+                                 f"more than {self.screw_min_thickness:g} mm.")
+        elif self.screw_holes and self.tabSymmetry == 1:
+            screws_ok = False
+            self.messages.append("Screw holes skipped: not supported with rotationally symmetric tabs.")
+
         for idx, piece in enumerate(pieces):
             (xs, xx, xy, xz) = piece[0]
             (ys, yx, yy, yz) = piece[1]
@@ -760,6 +839,10 @@ class BoxMakerCore:
                 if piece[7] == hole_target:
                     t = self.thickness
                     self.add_hole(hole_target, (x + d * t, y + a * t, x + dx - b * t, y + dy - c * t))
+
+            # Screw pilot holes in the tabs
+            if self.screw_holes and screws_ok:
+                self.add_screw_holes(x, y, dx, dy, (a, b, c, d), (atabs, btabs, ctabs, dtabs))
 
             # Handle dividers if this is the first piece (template)
             if idx == 0:

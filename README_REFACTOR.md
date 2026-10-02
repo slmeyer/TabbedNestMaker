@@ -51,7 +51,7 @@ python boxmaker.py --preset generic --length 150 --width 100 --height 75 --thick
 ### Bird nest boxes: entrance hole and the swift default
 
 Run with **no options** and you get a nest box for the common swift (*Apus apus*):
-inside 345 x 175 x 175 mm, 12 mm plywood, and a 65 x 28 mm fully rounded (oval) entrance in a
+inside 345 x 175 x 175 mm, 12 mm plywood (30 mm tabs), and a 65 x 28 mm fully rounded (oval) entrance in a
 long wall, near one end, 41 mm above the floor (nest cup goes at the far end). These are the
 dimensions recommended by mursejlerne.dk / DOF and, for the 28 x 65 mm entrance, by Swift
 Conservation, Action for Swifts and the RSPB.
@@ -83,6 +83,18 @@ Hole options:
 --preset {swift,generic}   Where unspecified values come from (default: swift)
 --outside                  Dimensions are outside measurements (swift default is --inside)
 ```
+
+Screw pilot holes (for weatherproofing a box that must last for decades, glue the joints with
+a waterproof glue *and* add screws):
+```
+--screws / --no-screws     Pilot holes through the joint tabs (swift default: on)
+--screw-diameter MM        Pilot hole diameter (default 2.5)
+```
+Holes are drawn in the middle of the tab nearest each end of every tabbed edge, plus the tab
+nearest the middle on edges longer than 200 mm. They are only made when the material is
+thicker than 9 mm (otherwise a note is printed). Each hole sits half a thickness in from the tab
+tip, so the screw goes through the tab and into the edge of the mating panel, centred in its
+thickness. Use stainless (A2/A4) screws and countersink the heads.
 
 Notes:
 - Positions refer to the flat wall plate as drawn (tabs excluded). For the wall plates the bottom
