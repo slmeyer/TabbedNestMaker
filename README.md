@@ -2,13 +2,15 @@
 
 [![CI - Test and Validate BoxMaker](https://github.com/rhuijben/TabbedBoxMaker/actions/workflows/ci.yml/badge.svg)](https://github.com/rhuijben/TabbedBoxMaker/actions/workflows/ci.yml)
 
-_version 2.0 - 21 Jun 2025_
+_version 1.0 - 29 Sep 2026_
 
 Original box maker by Elliot White (formerly of twot.eu, domain name now squatted)
 
 Heavily modified by [Paul Hutchison](https://github.com/paulh-rnd)
 
 Refactored for testability and CLI support by [Bert Huijben](https://github.com/rhuijben)
+
+Extended with holes for birds entrance and a sloping roof with added proteting plate
 
 ## What's New in Version 2.0
 
