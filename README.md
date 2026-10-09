@@ -1,4 +1,4 @@
-# TabbedBoxMaker: A free Inkscape extension for generating tab-jointed box patterns
+# TabbedNestMaker: A free Inkscape extension for generating birds nest boxes based on tab-jointed box patterns - an extension of TabbedBoxMaker
 
 [![CI - Test and Validate BoxMaker](https://github.com/rhuijben/TabbedBoxMaker/actions/workflows/ci.yml/badge.svg)](https://github.com/rhuijben/TabbedBoxMaker/actions/workflows/ci.yml)
 
